@@ -29,6 +29,19 @@ namespace TwitchChatVoteWatch
             }
         }
 
+
+        private string sBaseWindowTitle = "Twitch Chat Vote Watch";
+        private string sExtraWindowTitle = "";
+        public string WindowTitle
+        {
+            get { return (sBaseWindowTitle + " " + sExtraWindowTitle).Trim(); }
+            set
+            {
+                sExtraWindowTitle = value;
+                NotifyPropertyChanged("WindowTitle");
+            }
+        }
+
         private int nCheckLastSeconds = 30;
         public string CheckLastSeconds
         {
@@ -67,7 +80,7 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        private string sMessageFilter = @"\w+";
+        private string sMessageFilter = @"\S+";
         public string MessageFilter
         {
             get { return sMessageFilter; }
@@ -87,7 +100,7 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        private bool DoThePoll = false;
+        private bool DoThePoll = true;
 
         public IRCbot irc = null;
         #endregion
@@ -122,11 +135,6 @@ namespace TwitchChatVoteWatch
         #region Events
         private void ircWorker_DoWork(object sender, DoWorkEventArgs e)
         {
-            ConnectToServer connectToServer = (ConnectToServer)e.Argument;
-            Log("Connecting to " + connectToServer.Server + ":" + connectToServer.Port + "...");
-            irc = new IRCbot(connectToServer);
-            irc.MessageReceived += Irc_MessageReceived;
-            Connected = true;
             irc.Start();
         }
 
@@ -134,10 +142,9 @@ namespace TwitchChatVoteWatch
         {
             while (true)
             {
-                if (DoThePoll)
-                {
-                    DoVote();
-                }
+                if (e.Cancel) { break; }
+
+                DoVote();
                 Thread.Sleep(500);
             }
         }
@@ -169,10 +176,7 @@ namespace TwitchChatVoteWatch
 
         private void Window_Closing(object sender, CancelEventArgs e)
         {
-            if (Connected)
-            {
-                Disconnect();
-            }
+            Disconnect();
         }
 
         private void tbLookBack_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -211,6 +215,14 @@ namespace TwitchChatVoteWatch
         #region Methods
         private void DoVote()
         {
+            if (!DoThePoll) { return; }
+            if (!Connected) { return; }
+            if (ChatBox.Count <= 0) { return; }
+
+            // Polling occurs every time a message is received OR at a fixed interval
+            // If a poll is in progress let's not bother doing another
+            DoThePoll = false;
+
             List<TrackedItem> lTrackedItems = new List<TrackedItem>();
 
             // Start at the the most recent items and work backwards
@@ -255,52 +267,63 @@ namespace TwitchChatVoteWatch
             if (lTrackedItems.Count > 0)
             {
                 // Sort the items, with the largest count being top. If count is the same, sort by alphabetical order
-                lTrackedItems.Sort(delegate (TrackedItem x, TrackedItem y)
-                {
-                    if (x == null && y == null) { return 0; }
-                    if (x == null) { return 1; }
-                    if (y == null) { return -1; }
-                    if (x.Count.Equals(y.Count)) { return x.Message.CompareTo(y.Message); }
-                    return y.Count.CompareTo(x.Count);
-                });
-
+                lTrackedItems.Sort();
                 TrackedItems = new ObservableCollection<TrackedItem>(lTrackedItems);
             }
             else
             {
                 TrackedItems = null;
             }
+
+            DoThePoll = true;
         }
 
         public void Log(MessageItem messageItem)
         {
-            App.Current.Dispatcher.Invoke((Action)delegate
+            Application.Current.Dispatcher.Invoke((Action)delegate
             {
                 ChatBox.Add(messageItem);
             });
         }
 
-        public void Log(string sMessage, string sUser = "[system]")
+        public void Log(string sMessage)
         {
-            Log(new MessageItem(MessageItem.MessageTypes.SYSTEM, sUser, sMessage));
+            Log(new MessageItem(sMessage));
         }
 
         private void Connect()
         {
-            ConnectToServer connectToServer = new ConnectToServer();
-            if ((bool)connectToServer.ShowDialog())
+            ConnectToServer cts = new ConnectToServer();
+            if ((bool)cts.ShowDialog())
             {
-                ircWorker.RunWorkerAsync(connectToServer);
+                irc = new IRCbot(cts.Server, int.Parse(cts.Port), cts.Nickname, cts.Nickname, cts.Channel, cts.Password);
+                irc.MessageReceived += Irc_MessageReceived;
+                Connected = true;
+                Log("Connecting to server " + irc.Server + "...");
+                ircWorker.RunWorkerAsync();
                 pollWorker.RunWorkerAsync();
+                WindowTitle = irc.Channel;
             }
-
         }
 
         private void Disconnect()
         {
+            if (irc != null)
+            {
+                Log("Disconnecting from server " + irc.Server + "...");
+            }
+            else
+            {
+                Log("Disconnecting from server...");
+            }
+
+            WindowTitle = "";
+
             Connected = false;
+
             if (ircWorker != null)
             {
+                irc.Cancelled = true;
                 ircWorker.CancelAsync();
             }
 
@@ -308,8 +331,6 @@ namespace TwitchChatVoteWatch
             {
                 pollWorker.CancelAsync();
             }
-
-            Log("Disconnected from server.");
         }
         #endregion
     }

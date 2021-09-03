@@ -67,7 +67,7 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        private string sChannel = "#jltomy";
+        private string sChannel = "#twitchnamehere";
         public string Channel
         {
             get { return sChannel; }
@@ -78,7 +78,7 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        private string sPassword = "oauth:iuli0qzzkovv1vtdut11rvenvdwz0x";
+        private string sPassword = "Please visit: https://twitchapps.com/tmi/";
         public string Password
         {
             get { return sPassword; }
@@ -94,6 +94,19 @@ namespace TwitchChatVoteWatch
             InitializeComponent();
 
             DataContext = this;
+
+            IniFile iniFile = new IniFile("config.ini");
+            string sServer = iniFile.Read("Server", "ConnectionDetails");
+            string sPort = iniFile.Read("Port", "ConnectionDetails");
+            string sNickname = iniFile.Read("Nickname", "ConnectionDetails");
+            string sChannel = iniFile.Read("Channel", "ConnectionDetails");
+            string sPassword = iniFile.Read("Password", "ConnectionDetails");
+
+            if (!String.IsNullOrEmpty(sServer)) { Server = sServer; }
+            if (!String.IsNullOrEmpty(sPort)) { Port = sPort; }
+            if (!String.IsNullOrEmpty(sNickname)) { Nickname = sNickname; }
+            if (!String.IsNullOrEmpty(sChannel)) { Channel = sChannel; }
+            if (!String.IsNullOrEmpty(sPassword)) { Password = sPassword; }
         }
 
         private void btnCancel_Click(object sender, RoutedEventArgs e)
@@ -103,6 +116,13 @@ namespace TwitchChatVoteWatch
 
         private void btnOK_Click(object sender, RoutedEventArgs e)
         {
+            // Save our choices for next time
+            IniFile iniFile = new IniFile("config.ini");
+            iniFile.Write("Server", Server, "ConnectionDetails");
+            iniFile.Write("Port", Port, "ConnectionDetails");
+            iniFile.Write("Nickname", Nickname, "ConnectionDetails");
+            iniFile.Write("Channel", Channel, "ConnectionDetails");
+            iniFile.Write("Password", Password, "ConnectionDetails");
             this.DialogResult = true;
         }
     }

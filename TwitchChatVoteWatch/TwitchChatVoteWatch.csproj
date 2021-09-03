@@ -59,6 +59,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="IniFile.cs" />
     <Compile Include="TrackedItem.cs" />
     <Page Include="ConnectToServer.xaml">
       <SubType>Designer</SubType>

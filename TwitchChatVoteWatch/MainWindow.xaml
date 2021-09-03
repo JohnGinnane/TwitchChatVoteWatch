@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TwitchChatVoteWatch"
         mc:Ignorable="d"
-        Title="MainWindow"
+        Title="{Binding WindowTitle}"
         Height="450"
         Width="800"
         Closing="Window_Closing">
@@ -26,14 +26,19 @@
         <Menu Grid.Column="0"
               Grid.ColumnSpan="99"
               Grid.Row="0">
-            <MenuItem Header="File">
-                <MenuItem Header="Connect"
+            <MenuItem Header="_File">
+                <MenuItem Header="_Connect"
                           Name="File_Connect"
                           Click="File_Connect_Click"
                           IsEnabled="{Binding Connected, Converter={StaticResource InverseBooleanConverter}}"/>
-                <MenuItem Header="Disconnect" Name="File_Disconnect" Click="File_Disconnect_Click" IsEnabled="{Binding Connected}"/>
+                <MenuItem Header="_Disconnect"
+                          Name="File_Disconnect"
+                          Click="File_Disconnect_Click"
+                          IsEnabled="{Binding Connected}"/>
                 <Separator/>
-                <MenuItem Header="Exit" Name="File_Exit" Click="File_Exit_Click"/>
+                <MenuItem Header="_Exit"
+                          Name="File_Exit"
+                          Click="File_Exit_Click"/>
             </MenuItem>
         </Menu>
 
@@ -43,12 +48,6 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="auto"/>
             </Grid.RowDefinitions>
-            <!--<TextBox x:Name="tbChat"
-                 Grid.Row="0"
-                 Margin="3"
-                 Background="LightGray"
-                     Text="{Binding ChatText, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
-                 IsReadOnly="True"/>-->
             <ListBox x:Name="lbChat"
                      Grid.Row="0"
                      Margin="3"
@@ -67,10 +66,10 @@
                 <RowDefinition Height="auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="4*"/>
             </Grid.RowDefinitions>
 
-            <Label Content="Filter (regular expression, separated by new lines):"
+            <Label Content="Filter (regular expression):"
                    Grid.Column="0"
                    Grid.ColumnSpan="10"
                    Grid.Row="0"/>

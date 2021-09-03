@@ -1,10 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 
 namespace TwitchChatVoteWatch
 {
@@ -41,7 +35,7 @@ namespace TwitchChatVoteWatch
                 return Message.CompareTo(other.Message);
             }
 
-            return Count.CompareTo(other.Count);
+            return other.Count.CompareTo(Count);
         }
 
         public bool Equals(TrackedItem other)

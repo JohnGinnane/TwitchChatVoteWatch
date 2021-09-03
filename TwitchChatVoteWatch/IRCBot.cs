@@ -20,47 +20,52 @@ namespace TwitchChatVoteWatch
     // The source of most of this code
     public class IRCbot
     {
-        // server to connect to (edit at will)
-        private readonly string _server;
-        // server port (6667 by default)
-        private readonly int _port;
-        // user information defined in RFC 2812 (IRC: Client Protocol) is sent to the IRC server 
-        private readonly string _user;
+        #region Properties
+        private bool bCancelled = false;
+        public bool Cancelled
+        {
+            get { return bCancelled; } 
+            set
+            {
+                bCancelled = value;
+            }
+        }
 
-        // the bot's nickname
-        private readonly string _nick;
-        // channel to join
-        private readonly string _channel;
+        private string sServer;
+        public string Server => sServer;
 
-        private readonly string _pass;
+        private int nPort = 80;
+        public int Port => nPort;
 
-        private readonly int _maxRetries;
+        private string sUser;
+        public string User => sUser;
+
+        private string sNickname;
+        public string Nickname => sNickname;
+
+        private string sChannel;
+        public string Channel => sChannel;
+
+        private string sPassword;
+        public string Password => sPassword;
+
+        private int nMaxretries = 3;
+        public int MaxRetries => nMaxretries;
+        #endregion
 
         public delegate void MessageReceivedEventHandler(object sender, MessageReceivedEventArgs e);
 
         public event MessageReceivedEventHandler MessageReceived;
 
-        public IRCbot(string server, int port, string user, string nick, string channel, string pass, int maxRetries = 3)
+        public IRCbot(string server, int port, string user, string nick, string channel, string pass = "", int maxRetries = 3)
         {
-            _server = server;
-            _port = port;
-            _user = user;
-            _nick = nick;
-            _channel = channel;
-            _maxRetries = maxRetries;
-        }
-
-        public IRCbot(ConnectToServer cts, int maxRetries = 3)
-        {
-            _server = cts.Server;
-            int port = 80;
-            int.TryParse(cts.Port, out port);
-            _port = port;
-            _user = cts.Nickname;
-            _nick = cts.Nickname;
-            _channel = cts.Channel;
-            _pass = cts.Password;
-            _maxRetries = maxRetries;
+            sServer = server;
+            nPort = port;
+            sUser = user;
+            sNickname = nick;
+            sChannel = channel;
+            sPassword = pass;
+            nMaxretries = maxRetries;
         }
 
         public void Start()
@@ -71,32 +76,41 @@ namespace TwitchChatVoteWatch
             {
                 try
                 {
-                    using (var irc = new TcpClient(_server, _port))
+                    using (var irc = new TcpClient(Server, Port))
                     using (var stream = irc.GetStream())
                     using (var reader = new StreamReader(stream))
                     using (var writer = new StreamWriter(stream))
                     {
-                        writer.WriteLine("PASS " + _pass);
+                        writer.WriteLine("PASS " + Password);
                         writer.Flush();
-                        writer.WriteLine("NICK " + _nick);
+                        writer.WriteLine("NICK " + Nickname);
                         writer.Flush();
-                        writer.WriteLine("USER " + _user + " 0 * :" + _user);
+                        writer.WriteLine("USER " + User + " 0 * :" + User);
                         writer.Flush();
 
                         Regex rxUser = new Regex(@"@(\w+)\.tmi\.twitch.tv", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-                        Regex rxMessage = new Regex(_channel + @" :(.*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                        Regex rxMessage = new Regex(sChannel + @" :(.*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
                         while (true)
                         {
+                            if (Cancelled)
+                            {
+                                break;
+                            }
+
                             string inputLine;
+
                             while ((inputLine = reader.ReadLine()) != null)
                             {
-                                Console.WriteLine("<- " + inputLine);
-                                
+                                if (Cancelled)
+                                {
+                                    break;
+                                }
+
                                 Match mUser = rxUser.Match(inputLine);
                                 Match mMessage = rxMessage.Match(inputLine);
 
-                                // If there are no messages then just dump the text
+                                // If we couldn't parse the user or message then just post it as a system message
                                 if (!mUser.Success || !mMessage.Success)
                                 {
                                     MessageReceived?.Invoke(this, new MessageReceivedEventArgs(new MessageItem(MessageItem.MessageTypes.SYSTEM, "[system]", inputLine)));
@@ -107,13 +121,14 @@ namespace TwitchChatVoteWatch
                                     MessageReceived?.Invoke(this, new MessageReceivedEventArgs(messageItem));
                                     continue;
                                 }
-                                
+
                                 string[] splitInput = inputLine.Split(new Char[] { ' ' });
                                 switch (splitInput[1])
                                 {
                                     case "001":
-                                        writer.WriteLine("JOIN " + _channel);
+                                        writer.WriteLine("JOIN " + sChannel);
                                         writer.Flush();
+                                        MessageReceived?.Invoke(this, new MessageReceivedEventArgs(new MessageItem("Connected to server.")));
                                         break;
                                     default:
                                         break;
@@ -124,12 +139,13 @@ namespace TwitchChatVoteWatch
                 }
                 catch (Exception e)
                 {
-                    // shows the exception, sleeps for a little while and then tries to establish a new connection to the IRC server
-                    Console.WriteLine(e.ToString());
+                    MessageReceived?.Invoke(this, new MessageReceivedEventArgs(new MessageItem(e.ToString())));
                     Thread.Sleep(5000);
-                    retry = ++retryCount <= _maxRetries;
+                    retry = ++retryCount <= MaxRetries;
                 }
             } while (retry);
+
+            MessageReceived?.Invoke(this, new MessageReceivedEventArgs(new MessageItem("Disconnected.")));
         }
     }
 }

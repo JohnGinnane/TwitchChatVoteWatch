@@ -1,19 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace TwitchChatVoteWatch
 {
     public class MessageItem : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
-        // This method is called by the Set accessor of each property.
-        // The CallerMemberName attribute that is applied to the optional propertyName
-        // parameter causes the property name of the caller to be substituted as an argument.
         private void NotifyPropertyChanged([CallerMemberName] string propertyName = "")
         {
             if (PropertyChanged != null)
@@ -72,13 +65,7 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        public string Print
-        {
-            get
-            {
-                return "[" + Received.ToString("T") + "] " + User + ": " + Message;
-            }
-        }
+        public string Print => "[" + Received.ToString("T") + "] " + User + ": " + Message;
 
         public MessageItem(MessageTypes eMessageType, string sUser, string sMessage)
         {
@@ -86,6 +73,10 @@ namespace TwitchChatVoteWatch
             MessageType = eMessageType;
             User = sUser;
             Message = sMessage;
+        }
+
+        public MessageItem(string sMessage) : this(MessageTypes.SYSTEM, "[system]", sMessage)
+        {
         }
     }
 }
