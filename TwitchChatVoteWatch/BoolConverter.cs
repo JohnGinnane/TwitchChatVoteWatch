@@ -3,6 +3,8 @@ using System.Windows.Data;
 
 namespace TwitchChatVoteWatch
 {
+    // https://github.com/github/VisualStudio/blob/master/src/GitHub.UI/Converters/InverseBooleanConverter.cs 
+    // Source to this code
     [ValueConversion(typeof(bool), typeof(bool))]
     public class InverseBooleanConverter : IValueConverter
     {

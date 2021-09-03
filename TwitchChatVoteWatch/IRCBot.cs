@@ -15,6 +15,9 @@ namespace TwitchChatVoteWatch
         public MessageReceivedEventArgs(MessageItem messageItem) { MessageItem = messageItem; }
         public MessageItem MessageItem { get; }
     }
+
+    // https://codereview.stackexchange.com/a/142674
+    // The source of most of this code
     public class IRCbot
     {
         // server to connect to (edit at will)
