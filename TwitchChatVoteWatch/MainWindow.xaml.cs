@@ -119,6 +119,7 @@ namespace TwitchChatVoteWatch
             pollWorker.WorkerSupportsCancellation = true;
         }
 
+        #region Events
         private void ircWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             ConnectToServer connectToServer = (ConnectToServer)e.Argument;
@@ -141,100 +142,11 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        private void DoVote()
-        {
-            List<TrackedItem> lTrackedItems = new List<TrackedItem>();
-
-            //safePendingList.RemoveAll(item => item.Value == someValue);
-            for (int i = ChatBox.Count - 1; i >= 0; i--)
-            {
-                MessageItem messageItem = ChatBox[i];
-
-                if (messageItem.MessageType != MessageItem.MessageTypes.USER) { continue; }
-                if (String.IsNullOrEmpty(messageItem.Message)) { continue; }
-
-                if ((DateTime.UtcNow - messageItem.Received).TotalSeconds <= nCheckLastSeconds)
-                {
-                    string sTrackedMessage = messageItem.Message;
-
-                    if (!String.IsNullOrEmpty(MessageFilter))
-                    {
-                        Match match = Regex.Match(messageItem.Message, MessageFilter, RegexOptions.IgnoreCase);
-
-                        if (match == null) { continue; }
-                        if (!match.Success) { continue; }
-                        sTrackedMessage = match.Value;
-                    }
-
-                    int foundIndex = lTrackedItems.FindIndex(x => x.Message == sTrackedMessage);
-
-                    if (foundIndex < 0)
-                    {
-                        lTrackedItems.Add(new TrackedItem(sTrackedMessage, 1));
-                    }
-                    else
-                    {
-                        lTrackedItems[foundIndex].Count++;
-                    }
-                }
-            }
-
-            lTrackedItems.Sort(delegate (TrackedItem x, TrackedItem y)
-            {
-                if (x == null && y == null) { return 0; }
-                if (x == null) { return 1; }
-                if (y == null) { return -1; }
-                if (x.Count.Equals(y.Count)) { return x.Message.CompareTo(y.Message); }
-                return y.Count.CompareTo(x.Count);
-            });
-
-            TrackedItems = new ObservableCollection<TrackedItem>(lTrackedItems);
-        }
-
-        public void Log(MessageItem messageItem)
-        {
-            App.Current.Dispatcher.Invoke((Action)delegate // <--- HERE
-            {
-                ChatBox.Add(messageItem);
-            });
-        }
-
-        public void Log(string sMessage, string sUser = "[system]")
-        {
-            Log(new MessageItem(MessageItem.MessageTypes.SYSTEM, sUser, sMessage));
-        }
-
         private void File_Exit_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
         }
 
-        private void Connect()
-        {
-            ConnectToServer connectToServer = new ConnectToServer();
-            if ((bool)connectToServer.ShowDialog())
-            {
-                ircWorker.RunWorkerAsync(connectToServer);
-                pollWorker.RunWorkerAsync();
-            }
-
-        }
-
-        private void Disconnect()
-        {
-            Connected = false;
-            if (ircWorker != null)
-            {
-                ircWorker.CancelAsync();
-            }
-
-            if (pollWorker != null)
-            {
-                pollWorker.CancelAsync();
-            }
-
-            Log("Disconnected from server.");
-        }
 
         private void Irc_MessageReceived(object sender, MessageReceivedEventArgs e)
         {
@@ -275,7 +187,7 @@ namespace TwitchChatVoteWatch
                 if (nValue <= 0)
                 {
                     nValue = 1;
-                } 
+                }
                 else if (nValue > 600)
                 {
                     nValue = 600;
@@ -285,6 +197,8 @@ namespace TwitchChatVoteWatch
             }
         }
 
+        // https://stackoverflow.com/a/46548292
+        // Simple solution to have the chatbox automatically scroll down as new items are added
         private void lbChat_ScrollChanged(object sender, System.Windows.Controls.ScrollChangedEventArgs e)
         {
             if (e.OriginalSource is ScrollViewer scrollviewer && Math.Abs(e.ExtentHeightChange) > 0.0)
@@ -292,5 +206,111 @@ namespace TwitchChatVoteWatch
                 scrollviewer.ScrollToBottom();
             }
         }
+        #endregion
+
+        #region Methods
+        private void DoVote()
+        {
+            List<TrackedItem> lTrackedItems = new List<TrackedItem>();
+
+            // Start at the the most recent items and work backwards
+            // As soon as we hit an item outside of our time we stop looping because all subsequent items will also be outside the time window
+            for (int i = ChatBox.Count - 1; i >= 0; i--)
+            {
+                MessageItem messageItem = ChatBox[i];
+
+                if (messageItem.MessageType != MessageItem.MessageTypes.USER) { continue; }
+                if (String.IsNullOrEmpty(messageItem.Message)) { continue; }
+
+                if ((DateTime.UtcNow - messageItem.Received).TotalSeconds <= nCheckLastSeconds)
+                {
+                    string sTrackedMessage = messageItem.Message;
+
+                    if (!String.IsNullOrEmpty(MessageFilter))
+                    {
+                        Match match = Regex.Match(messageItem.Message, MessageFilter, RegexOptions.IgnoreCase);
+
+                        if (match == null) { continue; }
+                        if (!match.Success) { continue; }
+                        sTrackedMessage = match.Value;
+                    }
+
+                    int foundIndex = lTrackedItems.FindIndex(x => x.Message == sTrackedMessage);
+
+                    if (foundIndex < 0)
+                    {
+                        lTrackedItems.Add(new TrackedItem(sTrackedMessage, 1));
+                    }
+                    else
+                    {
+                        lTrackedItems[foundIndex].Count++;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (lTrackedItems.Count > 0)
+            {
+                // Sort the items, with the largest count being top. If count is the same, sort by alphabetical order
+                lTrackedItems.Sort(delegate (TrackedItem x, TrackedItem y)
+                {
+                    if (x == null && y == null) { return 0; }
+                    if (x == null) { return 1; }
+                    if (y == null) { return -1; }
+                    if (x.Count.Equals(y.Count)) { return x.Message.CompareTo(y.Message); }
+                    return y.Count.CompareTo(x.Count);
+                });
+
+                TrackedItems = new ObservableCollection<TrackedItem>(lTrackedItems);
+            }
+            else
+            {
+                TrackedItems = null;
+            }
+        }
+
+        public void Log(MessageItem messageItem)
+        {
+            App.Current.Dispatcher.Invoke((Action)delegate
+            {
+                ChatBox.Add(messageItem);
+            });
+        }
+
+        public void Log(string sMessage, string sUser = "[system]")
+        {
+            Log(new MessageItem(MessageItem.MessageTypes.SYSTEM, sUser, sMessage));
+        }
+
+        private void Connect()
+        {
+            ConnectToServer connectToServer = new ConnectToServer();
+            if ((bool)connectToServer.ShowDialog())
+            {
+                ircWorker.RunWorkerAsync(connectToServer);
+                pollWorker.RunWorkerAsync();
+            }
+
+        }
+
+        private void Disconnect()
+        {
+            Connected = false;
+            if (ircWorker != null)
+            {
+                ircWorker.CancelAsync();
+            }
+
+            if (pollWorker != null)
+            {
+                pollWorker.CancelAsync();
+            }
+
+            Log("Disconnected from server.");
+        }
+        #endregion
     }
 }
