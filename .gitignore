@@ -7,6 +7,15 @@
 *.o
 *.so
 
+# Ignore VS and compfile stuff #
+################################
+*.suo
+*.user
+_ReSharper.*
+bin
+obj
+packages
+
 # Packages #
 ############
 # it's better to unpack these files and commit the raw source
