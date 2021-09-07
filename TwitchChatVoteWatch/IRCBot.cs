@@ -17,7 +17,7 @@ namespace TwitchChatVoteWatch
     }
 
     // https://codereview.stackexchange.com/a/142674
-    // The source of most of this code
+    // The basis for this class
     public class IRCbot
     {
         #region Properties
@@ -90,6 +90,8 @@ namespace TwitchChatVoteWatch
 
                         Regex rxUser = new Regex(@"@(\w+)\.tmi\.twitch.tv", RegexOptions.Compiled | RegexOptions.IgnoreCase);
                         Regex rxMessage = new Regex(sChannel + @" :(.*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                        string inputLine = "";
+                        Task<string> tIncoming = null;
 
                         while (true)
                         {
@@ -98,14 +100,21 @@ namespace TwitchChatVoteWatch
                                 break;
                             }
 
-                            string inputLine;
-
-                            while ((inputLine = reader.ReadLine()) != null)
+                            if (tIncoming == null)
                             {
-                                if (Cancelled)
-                                {
-                                    break;
+                                tIncoming = reader.ReadLineAsync();
+                            }
+
+                            if (tIncoming.IsCompleted)
+                            {
+                                if (inputLine == tIncoming.Result) {
+                                    tIncoming.Dispose();
+                                    tIncoming = null;
+                                    continue;
                                 }
+                                if (tIncoming.Result == null) { continue; }
+
+                                inputLine = tIncoming.Result;
 
                                 Match mUser = rxUser.Match(inputLine);
                                 Match mMessage = rxMessage.Match(inputLine);
@@ -133,6 +142,9 @@ namespace TwitchChatVoteWatch
                                     default:
                                         break;
                                 }
+
+                                tIncoming.Dispose();
+                                tIncoming = null;
                             }
                         }
                     }
@@ -143,7 +155,7 @@ namespace TwitchChatVoteWatch
                     Thread.Sleep(5000);
                     retry = ++retryCount <= MaxRetries;
                 }
-            } while (retry);
+            } while (retry && !Cancelled);
 
             MessageReceived?.Invoke(this, new MessageReceivedEventArgs(new MessageItem("Disconnected.")));
         }

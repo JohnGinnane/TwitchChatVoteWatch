@@ -42,6 +42,24 @@ namespace TwitchChatVoteWatch
             }
         }
 
+        private bool bMinimised = false;
+        public bool Minimised
+        {
+            get { return bMinimised; }
+            set
+            {
+                bMinimised = value;
+                IniFile iniFile = new IniFile("config.ini");
+                iniFile.Write("Minimised", bMinimised.ToString(), "Settings");
+                NotifyPropertyChanged("Minimised");
+                NotifyPropertyChanged("MinMaxStr");
+            }
+        }
+        public string MinMaxStr
+        {
+            get { return Minimised ? "_Maximise" : "_Minimise"; }
+        }
+
         private int nCheckLastSeconds = 30;
         public string CheckLastSeconds
         {
@@ -96,6 +114,7 @@ namespace TwitchChatVoteWatch
                 {
                     DoThePoll = false;
                 }
+
                 NotifyPropertyChanged("MessageFilter");
             }
         }
@@ -106,8 +125,8 @@ namespace TwitchChatVoteWatch
         #endregion
 
         public event PropertyChangedEventHandler PropertyChanged;
-        BackgroundWorker ircWorker = new BackgroundWorker();
-        BackgroundWorker pollWorker = new BackgroundWorker();
+        BackgroundWorker ircWorker = null;
+        BackgroundWorker pollWorker = null;
 
         // This method is called by the Set accessor of each property.
         // The CallerMemberName attribute that is applied to the optional propertyName
@@ -126,10 +145,120 @@ namespace TwitchChatVoteWatch
 
             DataContext = this;
             ChatBox = new ObservableCollection<MessageItem>();
-            ircWorker.DoWork += ircWorker_DoWork;
-            ircWorker.WorkerSupportsCancellation = true;
-            pollWorker.DoWork += pollWorker_DoWork;
-            pollWorker.WorkerSupportsCancellation = true;
+
+            LoadSettings();
+        }
+
+        private void LoadSettings()
+        {
+            // Try and restore the window's size and layout
+            IniFile iniFile = new IniFile("config.ini");
+
+            int nCheckLastSeconds = 30;
+            string sFilter = @"\S+";
+
+            int nWindowWidth = 800;
+            int nWindowHeight = 450;
+
+            int nChatWidth = 2;
+            GridUnitType gutChatType = GridUnitType.Star;
+            int nPollWidth = 1;
+            GridUnitType gutPollType = GridUnitType.Star;
+
+            try
+            {
+                string sWidth = iniFile.Read("Width", "Window");
+                if (!String.IsNullOrEmpty(sWidth))
+                {
+                    int.TryParse(sWidth, out nWindowWidth);
+                }
+            }
+            catch (Exception) { } finally { this.Width = nWindowWidth; }
+
+            try
+            {
+                string sHeight = iniFile.Read("Height", "Window");
+                if (!String.IsNullOrEmpty(sHeight))
+                {
+                    int.TryParse(sHeight, out nWindowHeight);
+                }
+            } 
+            catch (Exception) { } finally { this.Height = nWindowHeight; }
+
+            try
+            {
+                string sChatWidth = iniFile.Read("ChatWidth", "Window");
+
+                if (!String.IsNullOrEmpty(sChatWidth))
+                {
+                    if (sChatWidth.EndsWith("*"))
+                    {
+                        int.TryParse(sChatWidth.Substring(0, sChatWidth.Length - 1), out nChatWidth);
+                    }
+                    else
+                    {
+                        int.TryParse(sChatWidth, out nChatWidth);
+                        gutChatType = GridUnitType.Pixel;
+                    }
+                }
+            }
+            catch (Exception) { } finally { cdChatBox.Width = new GridLength(nChatWidth, gutChatType); }
+
+            try
+            {
+                string sPollWidth = iniFile.Read("PollWidth", "Window");
+
+                if (!String.IsNullOrEmpty(sPollWidth))
+                {
+                    if (sPollWidth.EndsWith("*"))
+                    {
+                        int.TryParse(sPollWidth.Substring(0, sPollWidth.Length - 1), out nPollWidth);
+                    }
+                    else
+                    {
+                        int.TryParse(sPollWidth, out nPollWidth);
+                        gutPollType = GridUnitType.Pixel;
+                    }
+                }
+
+            }
+            catch (Exception) { } finally { cdPoll.Width = new GridLength(nPollWidth, gutPollType); }
+        
+            try
+            {
+                string sCheckLastSeconds = iniFile.Read("CheckLastSeconds", "Settings");
+                if (!String.IsNullOrEmpty(sCheckLastSeconds))
+                {
+                    int.TryParse(sCheckLastSeconds, out nCheckLastSeconds);
+                }
+            } catch (Exception) { } finally { CheckLastSeconds = nCheckLastSeconds.ToString(); }
+
+            try
+            {
+                sFilter = iniFile.Read("Filter", "Settings");
+                MessageFilter = sFilter;
+            } catch (Exception) { }
+            
+        }
+
+        private void IrcWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (ircWorker != null)
+            {
+                ircWorker.Dispose();
+                ircWorker = null;
+            }
+        }
+
+        private void PollWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            TrackedItems = null;
+
+            if (pollWorker != null)
+            {
+                pollWorker.Dispose();
+                pollWorker = null;
+            }
         }
 
         #region Events
@@ -142,14 +271,17 @@ namespace TwitchChatVoteWatch
         {
             while (true)
             {
-                if (e.Cancel) { break; }
+                if (pollWorker.CancellationPending) 
+                {
+                    break;
+                }
 
                 DoVote();
                 Thread.Sleep(500);
             }
         }
 
-        private void File_Exit_Click(object sender, RoutedEventArgs e)
+        private void miFileExit_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
         }
@@ -164,12 +296,12 @@ namespace TwitchChatVoteWatch
             }
         }
 
-        private void File_Disconnect_Click(object sender, RoutedEventArgs e)
+        private void miFileDisconnect_Click(object sender, RoutedEventArgs e)
         {
             Disconnect();
         }
 
-        private void File_Connect_Click(object sender, RoutedEventArgs e)
+        private void miFileConnect_Click(object sender, RoutedEventArgs e)
         {
             Connect();
         }
@@ -177,6 +309,16 @@ namespace TwitchChatVoteWatch
         private void Window_Closing(object sender, CancelEventArgs e)
         {
             Disconnect();
+
+            IniFile iniFile = new IniFile("config.ini");
+
+            iniFile.Write("Filter", sMessageFilter, "Settings");
+            iniFile.Write("CheckLastSeconds", nCheckLastSeconds.ToString(), "Settings");
+
+            iniFile.Write("Width", this.ActualWidth.ToString(), "Window");
+            iniFile.Write("Height", this.ActualHeight.ToString(), "Window");
+            iniFile.Write("ChatWidth", cdChatBox.ActualWidth.ToString() + "*", "Window");
+            iniFile.Write("PollWidth", cdPoll.ActualWidth.ToString() + "*", "Window");
         }
 
         private void tbLookBack_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -296,6 +438,16 @@ namespace TwitchChatVoteWatch
             ConnectToServer cts = new ConnectToServer();
             if ((bool)cts.ShowDialog())
             {
+                ircWorker = new BackgroundWorker();
+                pollWorker = new BackgroundWorker();
+
+                ircWorker.DoWork += ircWorker_DoWork;
+                ircWorker.WorkerSupportsCancellation = true;
+                ircWorker.RunWorkerCompleted += IrcWorker_RunWorkerCompleted;
+                pollWorker.DoWork += pollWorker_DoWork;
+                pollWorker.WorkerSupportsCancellation = true;
+                pollWorker.RunWorkerCompleted += PollWorker_RunWorkerCompleted;
+
                 irc = new IRCbot(cts.Server, int.Parse(cts.Port), cts.Nickname, cts.Nickname, cts.Channel, cts.Password);
                 irc.MessageReceived += Irc_MessageReceived;
                 Connected = true;
@@ -321,9 +473,13 @@ namespace TwitchChatVoteWatch
 
             Connected = false;
 
-            if (ircWorker != null)
+            if (irc != null)
             {
                 irc.Cancelled = true;
+            }
+
+            if (ircWorker != null)
+            {
                 ircWorker.CancelAsync();
             }
 
@@ -331,7 +487,17 @@ namespace TwitchChatVoteWatch
             {
                 pollWorker.CancelAsync();
             }
+
+            if (TrackedItems != null)
+            {
+                TrackedItems = null;
+            }
         }
         #endregion
+
+        private void miMinMax_Click(object sender, RoutedEventArgs e)
+        {
+            Minimised = !Minimised;
+        }
     }
 }
